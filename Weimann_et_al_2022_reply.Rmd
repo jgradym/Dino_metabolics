@@ -1,0 +1,916 @@
+---
+title: "Weimann et al. 2022 Reply"
+author: "Chauncey Gadek"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+bibliography: refs.bib
+output:
+  html_document:
+    code_folding: hide
+  rmdformats::readthedown:
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=F, warning=F, message=F }
+library(ggplot2)
+library(ggpubr)
+library(tidyr)
+library(dplyr)
+library(reshape)
+library(tibble)
+library(purrr)
+library(tdr)
+library(faux)
+library(ggridges)
+library(MASS)
+library(tidybayes)
+library(brms)
+library(marginaleffects)
+library(ape)
+library(caper)
+library(geiger)
+library(nlme)
+library(phytools)
+library(robustHD)
+library(emmeans)
+library(loo)
+library("corpcor")
+library(caret)
+theme_set(theme_classic())
+#Load functions
+# sapply(list.files(pattern="[.]R$", path="~/Dropbox/Research/Dino_metabolics_rebuttal/functions", full.names=TRUE), source)
+
+```
+
+```{r, echo=F, warning=F, message=F}
+dat.lm <- read.csv(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/dino_MR_lm_jg.csv", header=T, stringsAsFactors = T)
+
+dat.calib <- read.csv(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/calib.csv", header=T, stringsAsFactors = T)
+
+dat.calib.extant <- read.csv(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/calib_25.csv", header=T, stringsAsFactors = T)
+
+dat.calib.fossil <- read.csv(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/calib_fossil.csv", header=T, stringsAsFactors = T)
+
+
+#load tree and taxon times from Iris Mendez' GitHub:https://github.com/IrisMenendez/Dinosaur_metabolism/blob/main/Data/Final_tree.nex
+
+tree <- read.nexus(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/consensus_Paleotree_final.tre")
+
+tree.tt <- ape::read.tree(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/extant.nwk")
+
+disc.df <-read.csv(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/disc_fossil.csv", header=T, stringsAsFactors = T)
+
+```
+This markdown file is meant to illustrate workflow (at a high level) for our reanalysis of @wiemann2022fossil. Broadly, we correct a single erroneous calibration point and re analyse the data following their presumed workflow. We then use Bayesian logistic regression to appropriately interrogate their data for a metabolic signal.
+
+
+# Apply Prediction Interval to original data
+
+## Linear model of original data as in Figure 1d.
+```{r, linear model, echo=F}
+lm.m.mr <- lm(Log.10..Upper.MR ~ Log.10..Body.Mass..g., data=dat.lm)
+summary(lm.m.mr)
+```
+
+First re-running a simple linear model with the data presented in @wiemann2022fossil figure 1d, we see a log-log relationship between body size and their lipoxidation signature-derived metabolic rate has a slope of ~ 1. This is unexpected given the body of research on metabolic rate body size scaling coefficients.
+
+
+@wiemann2022fossil used a 95% confidence interval to "predict" unknown thermal regimes from their lipoxidation signature-derived metabolic rates. But confidence intervals are inappropriate for predicting unknown values. Prediction intervals are a more appropriate classification tool--relating directly to a model's ability to predict new data. We generate prediction intervals for known endotherms and known other (thermy) based on the unaltered @wiemann2022fossil data. It is important to understand the overlap between prediction intervals parameterized from known data in order to evaluate the predictive power of @wiemann2022fossil framework. 
+
+This next code chunk does some data wrangling and generates prediction intervals based on the original @wiemann2022fossil data.
+
+```{R, prediction interval,  warning=F, message=F}
+
+#annoying but I want masses and names to match in each dataframe. The data from Weimann et al. do not match exactly by taxon name.
+calib.masses <- dat.lm%>%
+  dplyr::select(Taxon, Log.10..Body.Mass..g., Body.mass..g., classification)%>%
+  filter(Taxon %in% dat.calib$Taxon)
+
+calib.extant.masses <- dat.lm%>%
+  dplyr::select(Taxon, Log.10..Body.Mass..g., Body.mass..g., classification)%>%
+  filter(Taxon %in% dat.calib.extant$Taxon.Name)
+
+dat.calib <-left_join(dat.calib, calib.masses)
+
+dat.calib.extant<- dat.calib.extant%>%
+  mutate(Taxon = Taxon.Name)%>%
+left_join(., calib.extant.masses, by="Taxon")%>%
+  mutate(Log10.Lit.Mass.Specific.MR = log10(Literature.MR..mL.O2...1.h...1.g. * Body.mass..g.))
+
+#Prediction intervals
+
+#Full dataset 
+orig_df_full <- predict(lm.m.mr, interval="prediction")%>%cbind(dat.lm, .)
+
+#Endotherms
+orig_df_endo <- dat.lm%>%
+  filter(classification=="endo",
+         Age =="Extant")%>%
+  lm(Log.10..Upper.MR ~Log.10..Body.Mass..g., data=.)%>%
+  predict(., interval="prediction")%>%
+  cbind(dat.lm%>%filter(classification=="endo",
+         Age =="Extant"), .)
+
+# Non-endotherms
+orig_df_oth <- dat.lm%>%
+  filter(classification %in% c("ecto", "meso","oth"),
+         Age =="Extant")%>%
+  lm(Log.10..Upper.MR ~Log.10..Body.Mass..g., data=.)%>%
+  predict(., interval="prediction")%>%
+  cbind(dat.lm%>%filter(classification %in% c("ecto", "meso","oth"),
+         Age =="Extant"), .)
+
+```
+
+## Plot prediction intervals
+```{r, fig.dim=c(8,6), echo=F, warning=F, message=F}
+#Plot it
+#for plot label
+
+ggplot(orig_df_full, aes(Log.10..Body.Mass..g., Log.10..Upper.MR))+
+    #geom_point() +
+    #geom_line(aes(y=lwr), color = "red", linetype = "dashed")+
+    #geom_line(aes(y=upr), color = "red", linetype = "dashed")+
+    #geom_smooth(method=lm, se=F, color="black")+
+  #geom_smooth(data= orig_df_full %>% filter(thermy=="endo"), method=lm, se=T, fill="goldenrod", linetype=0)+
+ # geom_smooth(data=orig_df_endo, method="lm", fill="goldenrod1", linetype=0)+
+     geom_line(data=orig_df_endo,aes(y=lwr), color = "goldenrod", linetype = "dashed")+
+    geom_line(data=orig_df_endo, aes(y=upr), color = "goldenrod", linetype = "dashed")+
+ # geom_smooth(data=orig_df_oth, method="lm", fill="dodgerblue2", linetype=0)+
+     geom_line(data=orig_df_oth,aes(y=lwr), color = "dodgerblue2", linetype = "dashed")+
+    geom_line(data=orig_df_oth, aes(y=upr), color = "dodgerblue2", linetype = "dashed")+
+  geom_point(data= dat.lm, mapping= aes(Log.10..Body.Mass..g., Log.10..Upper.MR, fill=thermy), shape=21)+
+  scale_fill_manual(values=c("goldenrod", "dodgerblue2"))+
+  labs(y=expression(log["10"](MR)), x= expression(log["10"]~Body~Mass~(g)))+
+  theme_classic(base_size = 14)+
+  theme(legend.position = c(0.8,0.17))+
+  geom_text(data=dat.lm, aes(label=Taxon), size=2.5,
+    nudge_x = 0.2, nudge_y = 0.1, 
+    check_overlap = T
+  )
+
+```
+
+Blue points are non-endotherm samples and yellow points are endotherm samples as designated by @wiemann2022fossil. Yellow dashed lines are upper and lower bounds of prediction interval for known endotherm only linear model. Blue dashed lines delineate prediction interval for known other points. Note the prediction interval for non-endotherms encompasses 100% of known endotherm data points (if extrapolated).
+
+## Expected Scaling relationship
+
+Metabolic rate literature has shown that metabolic rate scales with mass to the power of (-1/4). Therefore log-log plots of MR against mass show a negative slope of ~ -1/4. Is this present in @wiemann2022fossil literature-derived MR and mass data? Given the poor documentation of sources for literature MR, the disparate types of MR used in this analysis (BMR, FMR, etc...) do their data show this expected trend? To examine this, we classified extant taxa from @wiemann2022fossil as known endotherms or ectotherms and plotted their mass-specific MR derived from the literature (but inadequately cited in @wiemann2022fossil ) against their body masses in a log-log plot.
+
+```{r, echo=F, warning=F, message=F}
+
+ggplot(data=dat.calib.extant%>%filter(classification %in% c("endo","ecto")), aes(Log.10..Body.Mass..g., log10(Literature.MR..mL.O2...1.h...1.g.), color=classification))+
+  geom_point()+
+  geom_smooth(method="lm", alpha=0.4, se=F)+
+  stat_regline_equation()+
+  theme_classic()+
+  theme(
+    legend.position = "none"
+  )+
+  scale_color_manual(values=c("blue", "red"))+
+  labs(x=expression(paste(Log["10"]~Body~Mass~(g))), y= expression(paste(Log["10"]~"Literature Mass-Specific MR (ml", O[2]*h^-1*g^-1, ")")))
+  
+
+```
+
+We see that known endotherms in red show a slightly positive slope barely greater than zero--running counter to the expected -1/4 slope derived from previous work. Ecotherms actually do show an almost -1/4 slope but the association is driven by a single point, making inference dubious.
+
+# Calibration issues
+
+The value of 11 for the Anseriform duck which drives the @wiemann2022fossil fossil calibration (Figure 1B) is from @legendre2016palaeohistological by way of @montes2007relationships where they measured RMR in captive _Anas platyrynchos_ ducklings in _mL_ O~2~ * h^-1^ * g^-1^ in @montes2007relationships and used an allometric correction in @legendre2016palaeohistological _mL_ O~2~ * h^-1^ * g^-0.67^ for the same values. @wiemann2022fossil use the allometrically corrected duck value with an uncorrected axis and possibly uncorrected values for other taxa, inflating the positive relationship between Literature MR and Amide derived values. 
+
+Therefore the value in Figure 1b for the Anseriform duck reads 11 but it should in fact be 2.35 based on calculation from the original source @montes2007relationships.
+
+Here are two linear models. The first is the model they used for fossil calibration in @wiemann2022fossil. The second is the model with a corrected value for the Duck point.
+
+```{r, warning=F, message=F}
+dat.calib[9,"Taxon"]<- dat.calib[8,1]
+dat.calib[9,2]<- dat.calib[8,2]
+dat.calib[9,3]<- 2.35
+
+lm.calib <-dat.calib%>%filter(!row_number() %in% c(9))%>%
+  lm(Literature.MR..mL.O2...1.h...1.g. ~ X.S.N..Amide...MC.in.vivo, data=.)
+
+summary(lm.calib)
+
+#  This is how fossils were calibrated (1.2994*Fossil Amide here)-3.9047
+#with added uncertainty add 1.2 to the value calculated above
+```
+
+```{r, warning=F, message=F}
+#Now replace the erroneous point
+
+lm.calib.rm <-dat.calib%>%filter(!row_number() %in% c(8))%>%
+  lm(Literature.MR..mL.O2...1.h...1.g. ~ X.S.N..Amide...MC.in.vivo, data=.)
+
+summary(lm.calib.rm)
+
+```
+
+We can see that the corrected point brings down the R^2^ value and raises the _P_ value as expected. So the fossil calibration formula goes from 1.2994 * ( _MC in vivo_) - 3.9047 to 0.3207 * ( _MC in vivo_) + 0.3371.
+
+## Plot R^2^ with/without corrected calibration
+
+Visualize  the calibration according to the supplementary data calibration tab n=8 extant amniotes and calibration with duck removed.
+
+```{r, echo=F, message=F, warning=F}
+ggplot(data=dat.calib%>%filter(!row_number() %in% c(9)), aes(X.S.N..Amide...MC.in.vivo, Literature.MR..mL.O2...1.h...1.g.))+
+  geom_point()+
+  geom_smooth(method="lm", color="grey66", fill= "grey88", alpha=0.4, se=F)+
+  geom_point(data=dat.calib%>%filter(!row_number() %in% c(8)), aes(X.S.N..Amide...MC.in.vivo, Literature.MR..mL.O2...1.h...1.g.), color="blue")+
+  geom_smooth(data=dat.calib%>%filter(!row_number() %in% c(8)), aes(X.S.N..Amide...MC.in.vivo, Literature.MR..mL.O2...1.h...1.g.), color="slateblue", method="lm", se=F)+
+  theme_classic()+
+  labs(x=expression(paste("Relative Intensity ([S-hcs] + [N-hcs]) x ", Amide^{-1})), y= expression(paste("Mass-Specific MR (", O[2]*h^-1*g^-1, ")")))+
+  geom_label(
+    label="r2 = 0.04 \n corrected", 
+    x=10,
+    y=1.5,
+    label.padding = unit(0.2, "lines"), # Rectangle size around label
+    label.size = 0.1,
+    color = "black",
+    fill="slateblue1",
+    alpha=0.4
+  )+
+  geom_label(
+    label="r2 = 0.83 \n original", 
+    x=10,
+    y=10,
+    label.padding = unit(0.2, "lines"), # Rectangle size around label
+    label.size = 0.2,
+    color = "black",
+    fill="grey88"
+  )
+```
+
+Grey line shows original calibration linear model. Purple line shows corrected linear model. The relationship all but disappears after correcting the duck point... 
+
+
+
+## Second calibration for extant taxa
+Though difficult to tell from the main text, it appears there were two calibrations(?) One for fossil taxa above and one for extant taxa (See Figure S7 and 'Extant Taxa' tab from supplementary workbook from @wiemann2022fossil)
+
+They regressed n=25 literature MR values (not cited??) against spectral Amide ( _MC in vivo_) values from museum samples. We know from the literature that again this duck point ( _Dendrocygna_) cannot be correct (much higher than hummingbird). So, in absence of the known lit-derived value we will remove this point from our calibration. Second, we suspect intense phylogenetic signal within this calibration and would like to correct for it. We will use the tree that @wiemann2022fossil used to run a PGLS model.
+
+```{r, warning=F, message=F}
+
+lm.calib.extant <-dat.calib.extant%>%
+  lm(Literature.MR..mL.O2...1.h...1.g. ~ X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities., data=.)
+
+summary(lm.calib.extant)
+# this is where they derive the formula for calculated MR ((9.5273 * Amide) -8.0604 and then corrected MR just add 0.9
+
+#Remove the obviously incorrect duck point
+
+dat.calib.extant <- dat.calib.extant%>% filter(!Taxon.Name %in% c("Dendrocygna"))
+
+
+lm.calib.extant.rm <-dat.calib.extant%>%
+   lm(Literature.MR..mL.O2...1.h...1.g. ~ X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities., data=.)
+# 
+ summary(lm.calib.extant.rm)
+
+# This slightly changes our calibration for calculated MR to ((7.867 * Amide) - 6.141. 
+```
+
+Removing the _Dendrocygna_ point slightly lowers the slope of the calibration formula from ((9.5273 * _MC vivo_) -8.0604 to ((7.867 * _MC vivo_) - 6.141.
+
+
+## Phylogentic Least Squares Model for Extant Calibration
+### PGLS using Time tree from @wiemann2022fossil (Iris Mendez' Github)
+
+```{r,  warning=F, message=F}
+#Plot phylo real quick
+#plot(tree, cex=0.2)
+
+#need to create subtree with only extant taxa (this is tree from Iris Mendez' Github)
+ext.tree <- keep.tip(tree, as.character(dat.calib.extant$Taxon.Name))
+
+
+
+#also use tree from: http://timetree.org/ 
+#Remove the underscore
+tree.tt$tip.label <-gsub("\\_.*","",tree.tt$tip.label)
+tree.tt$tip.label[tree.tt$tip.label=="Eudromia"]  <- "Crypturellus"
+tree.tt$tip.label[tree.tt$tip.label=="Ornithorhynchus"]  <- "Platypus"
+tree.tt$tip.label[tree.tt$tip.label=="Setifer"]  <- "Tenrec"
+tree.tt$tip.label[tree.tt$tip.label=="Antrozous"]  <- "Anthrozous"
+
+
+
+#get data in simplified format with taxon as rownames
+pgls.dat <- dat.calib.extant%>%
+  dplyr::select(Taxon.Name, Literature.MR..mL.O2...1.h...1.g., X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities.)%>%
+  column_to_rownames(., "Taxon.Name")
+
+pgls.dat$Taxon.Name <- dat.calib.extant$Taxon.Name
+
+#is the tree ultrametric?
+#is.ultrametric(tree.tt)
+#yep!
+
+#have to make a second one to match order of tips in time tree
+tiporder <- tree.tt$tip.label
+pgls.dat2 <-pgls.dat[tiporder,]
+
+# Since we do not have an ultrametric tree here we need to specify weights as per Liam Revell here: http://blog.phytools.org/2012/04/using-nlmegls-for-phylogenetic.html
+
+# compute weights
+w<-diag(vcv.phylo(ext.tree))
+
+#PGLS
+
+#Pagel correlation structure
+#lamda = 1 #pure Brownian motion; high phylo signal
+pglsModel.pgl.1 <- gls(Literature.MR..mL.O2...1.h...1.g. ~ X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities., correlation = corPagel(1,  ext.tree, form = ~Taxon.Name, fixed=T), weights=varFixed(~w),
+    data = pgls.dat, method = "REML")
+
+summary(pglsModel.pgl.1)
+
+```
+
+We see that a pure Brownian Motion model with high phylo signal and _Dendrocygna_ removed further reduces the slope of the extant calibration from 7.867 to 5.915003 and increases the intercept from -6.141 to -3.937516. 
+
+Next we will run a model with a starting value of _lamda_ at zero.
+
+```{r,  warning=F, message=F}
+#lamda = 0 #Low phylo signal, just plain old regression
+pglsModel.pgl.0 <- gls(Literature.MR..mL.O2...1.h...1.g. ~ X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities., correlation = corPagel(0,  ext.tree, form = ~Taxon.Name), weights=varFixed(~w),
+    data = pgls.dat, method = "REML")
+
+summary(pglsModel.pgl.0)
+
+```
+We see that pure phylogentic independence model and _Dendrocygna_ removed reduces the slope of the extant calibration from 7.867 to 7.414920 and further increases the intercept from -6.141 to -5.627356. The model estimates _lamda_ at 0.17, pretty low phylo signal actually. 
+
+
+```{r,  warning=F, message=F}
+anova(pglsModel.pgl.0, pglsModel.pgl.1)
+
+#Indicates low phylo signal; use pglsModel.pgl.0 as correction
+```
+
+Models selection favors the pure independence model. 
+
+```{r,  warning=F, message=F}
+fits <- as.data.frame(pglsModel.pgl.0$fitted)
+colnames(fits) <- "fitted"
+fits$Amide <-pgls.dat$X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities.
+fits$fitted2 <- pglsModel.pgl.1$fitted
+
+ggplot(fits, aes(Amide, fitted))+
+  geom_point()+
+  geom_smooth(method=lm, se=F)+
+  geom_smooth(aes(y=fitted2),method=lm, se=F, color="goldenrod")+
+  geom_smooth(data=pgls.dat, aes(x=X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities., y=Literature.MR..mL.O2...1.h...1.g.), method=lm, se=F, color="black")+
+  geom_point(data=pgls.dat, aes(x=X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities., y=Literature.MR..mL.O2...1.h...1.g.))+
+  theme_classic(base_size = 14)+
+  labs(x="Amide", y="PGLS fitted MC in vivo")
+
+```
+
+This plot shows the two PGLS regression lines from the tree they used for their figures, ancestral state reconstruction and, presumably, PGLS. The black line is just uncorrected linear model. The blue line is essentially identical to uncorrected linear regression setting _lamda_= 0 (phylogenetic independence). This is the line supported by model selection. The yellow line is the model forcing a high level of phylo signal ( _lamda_ = 1).This line is not supported. _lamda_ is estimated at ~ 0.17 by "best" model.
+
+ 
+### PGLS using Time tree from timetree.org
+```{r,  warning=F, message=F}
+
+# compute weights
+w2<-diag(vcv.phylo(tree.tt))
+
+#Pagel correlation structure
+#lamda = 1 #pure Brownian motion; high phylo signal
+tt.pgl.1 <- gls(Literature.MR..mL.O2...1.h...1.g. ~ X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities., correlation = corPagel(1,  tree.tt, form = ~Taxon.Name, fixed=T),
+    data = pgls.dat2, method = "REML")
+
+summary(tt.pgl.1)
+
+```
+
+We see that a pure Brownian Motion model with high phylo signal  and _Dendrocygna_ removed further reduces the slope of the extant calibration from 7.867 to 6.284117 and further increases the intercept from -6.141 to -4.332293 
+
+Next we will run a model with a starting value of _lamda_ at zero.
+
+```{r,  warning=F, message=F}
+#lamda = 0 #Low phylo signal, just plain old regression
+tt.pgl.0 <- gls(Literature.MR..mL.O2...1.h...1.g. ~ X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities., correlation = corPagel(0,  tree.tt, form = ~Taxon.Name),
+    data = pgls.dat2, method = "REML")
+
+summary(tt.pgl.0)
+
+```
+
+We see that a pure Brownian Motion model with high phylo signal and _Dendrocygna_ removed further reduces the slope of the extant calibration from 7.867 to 7.998161 and slightly decreases the intercept from -6.141 to -6.310608 
+
+```{r,  warning=F, message=F}
+anova(tt.pgl.0, tt.pgl.1)
+
+#Indicates low phylo signal; use tt.pgl.1 as correction
+```
+
+So, we need to use the low phylosignal model which changes the original slope from 7.867 to 7.998161  and increases the intercept from -6.141 to -6.310608. We will carry this updated calibration through the rest of our re-analyses.
+
+```{r,  warning=F, message=F}
+fits <- as.data.frame(tt.pgl.0$fitted)
+colnames(fits) <- "fitted"
+fits$Amide<-pgls.dat2$X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities.
+fits$fitted2 <-(tt.pgl.1$fitted)
+
+
+ggplot(fits, aes(Amide, fitted))+
+  geom_smooth(method=lm, se=F)+
+  geom_smooth(aes(y=fitted2), method=lm, se=F, color="goldenrod")+
+  geom_smooth(data=pgls.dat2, aes(x=X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities., y=Literature.MR..mL.O2...1.h...1.g.), method=lm, se=F, color="black")+
+  geom_point(data=pgls.dat2, aes(x=X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities., y=Literature.MR..mL.O2...1.h...1.g.))+
+  theme_classic(base_size = 14)+
+  labs(x="Literature MR", y="PGLS fitted MC in vivo")
+
+```
+
+This plot shows the two PGLS regression lines from the timetree pgls. The black line is just regular linear model. The blue line (barely visible) is essentially identical to uncorrected linear regression.This is the line supported by model selection. The yellow line is the model forcing a high level of phylo signal ( _lamda_ = 1).This line is not supported. _Lamda_ is estimated at ~ 0.
+
+
+Therefore, we will give them the benefit  of the doubt and use the time tree pgls with _Dendrocygna_ removed. This flattens slope slightly changing calibration formula from (9.527 * _MC in vivo_) - 8.060 to (7.998161 * _MC in vivo_) - 6.310608 for all extant taxa. 
+
+```{r, warning=F, message=F}
+# Add corrected columns for adjusted calcuatedMR and corrected
+# We will give them the benefit  of the doubt and use the time tree pgls with Dendrocygna removed. This flattens slope slighlty...
+
+ dat.calib.extant$adj_calc_MR <-(7.998161*dat.calib.extant$X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities.)-6.310608
+ dat.calib.extant$adj_corr_MR <-dat.calib.extant$adj_calc_MR +0.9
+
+#This is for fun to see what applying the fossil calibration (since they used extant MRs anyway) to all extant taxa
+dat.calib.extant$adj_calc_MR_foss_cab <-(0.3207*dat.calib.extant$X.S.N..Amide...MC.in.vivo..normalized.spectral.intensities.)+0.3371
+dat.calib.extant$adj_corr_MR_foss_cab <-dat.calib.extant$adj_calc_MR_foss_cab +0.9
+
+```
+
+
+# Apply fossil calibration
+
+Unfold to view step-by step process
+
+```{r , fig.show="hold", out.width="50%"}
+dat.calib.fossil[31,1]<- dat.calib.fossil[1,1]
+dat.calib.fossil[31,8]<- dat.calib.fossil[1,8]
+dat.calib.fossil[31,9]<- 2.35
+
+
+#summary(lm.calib.rm)
+#  This is how fossils were calibrated (0.3207*Fossil Amide here)-0.3371
+#with added uncertainty add 1.2 to the value calculated above
+#use the above equation to produce corrected fossil MR estimates
+dat.calib.fossil$adj_calc_MR <- (0.3207*dat.calib.fossil$X.S.N..Amide..normalized.spectral.intensities....MC.in.vivo) +0.3371
+dat.calib.fossil$adj_corr_MR <- dat.calib.fossil$adj_calc_MR+ 1.2
+
+dat.calib.fossil$adj_calc_MR_foss_cab <- (0.3207*dat.calib.fossil$X.S.N..Amide..normalized.spectral.intensities....MC.in.vivo) +0.3371
+dat.calib.fossil$adj_corr_MR_foss_cab <- dat.calib.fossil$adj_calc_MR_foss_cab + 1.2
+
+
+#remove the first row Anseriform Bird 
+
+dat.calib.fossil.2 <- dat.calib.fossil%>%
+  slice(2:31)%>%
+  dplyr::select(Taxon, adj_calc_MR, adj_corr_MR, adj_calc_MR_foss_cab, adj_corr_MR_foss_cab) #select only columns needed for plotting
+
+dat.calib.extant.2 <- dat.calib.extant%>%
+  #filter(!row_number() %in% c(8))%>%
+  dplyr::select(Taxon.Name, adj_calc_MR, adj_corr_MR, adj_calc_MR_foss_cab, adj_corr_MR_foss_cab)%>%#select only columns needed for plotting
+  dplyr::rename(Taxon=Taxon.Name)
+
+full.analyses.df <- rbind(dat.calib.fossil.2, dat.calib.extant.2)
+
+body.masses <- dat.lm$Body.mass..g.
+full.analyses.df<-full.analyses.df%>%
+  left_join(., dat.lm, by="Taxon")
+full.analyses.df$Mass.Spec.MR.corr <- (full.analyses.df$Body.mass..g.* full.analyses.df$adj_corr_MR)
+full.analyses.df$Log.10.MR.corr <- log10(full.analyses.df$Mass.Spec.MR.corr)
+
+full.analyses.dfMass.Spec.MR.corr.foss.cab <- (full.analyses.df$Body.mass..g.* full.analyses.df$adj_corr_MR_foss_cab)
+full.analyses.df$Log.10.MR.corr.foss.cab <- log10(full.analyses.df$Mass.Spec.MR.corr)
+
+#endotherm model where we apply fossil calibration to all data
+end.mod.foss.cab <- full.analyses.df%>%
+  filter(classification=="endo",
+         Age=="Extant")%>%
+  lm(Log.10.MR.corr.foss.cab ~Log.10..Body.Mass..g., data=.)
+
+temp_var_endo_foss_cab <- predict(end.mod.foss.cab, interval="prediction")
+
+new_df_endo_foss_cab <- cbind(full.analyses.df%>%
+  filter(classification=="endo",
+         Age=="Extant"), temp_var_endo_foss_cab)
+
+#endotherm model with separate fossil and extant calibration as above and in Weimann et al. 2022
+end.mod2 <- full.analyses.df%>%
+  filter(thermy=="endo")%>%
+  lm(Log.10.MR.corr ~Log.10..Body.Mass..g., data=.)
+
+newdata <- full.analyses.df%>% dplyr::select(Log.10..Body.Mass..g.)
+
+temp_var_endo_PI <- predict(end.mod2, newdata=newdata, interval="prediction", level=0.95)
+temp_var_endo_CI <- predict(end.mod2, newdata=newdata, interval="confidence", level=0.95)
+
+new_df_endo_PI <- cbind(full.analyses.df, temp_var_endo_PI)
+new_df_endo_CI <- cbind(full.analyses.df, temp_var_endo_CI)
+
+#other therm model with extant and fossil calibration to generate PI and CI
+oth.mod2 <- full.analyses.df%>%
+  filter(classification %in%  c("ecto","meso", "oth"),
+         Age=="Extant")%>%
+  lm(Log.10.MR.corr ~Log.10..Body.Mass..g., data=.)
+
+temp_var_oth_PI <- predict(oth.mod2, newdata=newdata, interval="prediction", level=0.95)
+new_df_oth_PI <- cbind(full.analyses.df, temp_var_oth_PI)
+```
+
+
+
+# Expected MR patterns 
+
+Finally, we use John Grady's conceptual framework to test whether the mass specific MR shows the expected decrease with body mass or is flat consistent with the canceling effects of lifespan and cell metabolic rate. 
+
+## Plot mass-specific MR x mass for orginal and recalibrated data:
+```{R, echo=F, fig.show="hold", out.width="50%"}
+lg10.orig.endo <- dat.lm %>%
+  filter(classification %in% c("endo"))%>%
+  lm(log10(Calculated.MRs..mL.O2...1.h...1.g.)~log10(Body.mass..g.), data=.)%>%
+  predict(., interval = "prediction")%>%
+  cbind(dat.lm%>%filter(classification %in% c("endo")), .)
+
+lg10.orig.ecto <- dat.lm %>%
+  filter(classification %in% c("ecto"))%>%
+  lm(log10(Calculated.MRs..mL.O2...1.h...1.g.)~log10(Body.mass..g.), data=.)%>%
+  predict(., interval = "prediction")%>%
+  cbind(dat.lm%>%filter(classification %in% c("ecto")), .)
+
+
+p1<-ggplot(dat.lm%>%filter(classification%in%c("endo","ecto")), aes(Log.10..Body.Mass..g., log10(Calculated.MRs..mL.O2...1.h...1.g.)))+
+  geom_point(aes(color=classification))+
+  geom_point(data=dat.lm%>%filter(classification%in%c("oth")), color="gray", alpha=0.5)+
+  geom_smooth(aes(color=classification), method="lm", alpha=0.2, se=F)+
+  geom_line(data=lg10.orig.endo,aes(y=lwr), color = "red", linetype = "dashed")+
+  geom_line(data=lg10.orig.endo, aes(y=upr), color = "red", linetype = "dashed")+
+  geom_line(data=lg10.orig.ecto,aes(y=lwr), color = "blue", linetype = "dashed")+
+  geom_line(data=lg10.orig.ecto, aes(y=upr), color = "blue", linetype = "dashed")+
+  theme_classic(base_size = 14)+
+  scale_color_manual(values=c("blue", "red",  "grey"))+
+  theme_classic(base_size = 14)+
+  labs(x=expression(paste(Log["10"]~Body~Mass~(g))), y= expression(paste(Log["10"]~"Mass-Specific MR (", O[2]*h^-1*g^-1, ")")))+
+  theme(legend.title = element_blank(), 
+        legend.position = c(0.8,0.2))+
+  stat_regline_equation(label.y = 2, aes(label = ..eq.label..))
+p1
+
+
+# Get prediction intervals for updated data
+
+lg10.new.endo <- full.analyses.df %>%
+  filter(classification %in% c("endo"))%>%
+  lm(log10(adj_corr_MR) ~ Log.10..Body.Mass..g., data=.)%>%
+  predict(., interval = "prediction")%>%
+  cbind(full.analyses.df%>%filter(classification %in% c("endo")), .)
+
+
+lg10.new.ecto <- full.analyses.df %>%
+  filter(classification %in% c("ecto"))%>%
+  lm(log10(adj_corr_MR) ~ Log.10..Body.Mass..g., data=.)%>%
+  predict(., interval = "prediction")%>%
+  cbind(full.analyses.df%>%filter(classification %in% c("ecto")), .)
+
+
+#Make total adjusted MR
+full.analyses.df <- full.analyses.df%>%
+  mutate(Log10_total_adj_corr_MR = log10(Body.mass..g.*adj_corr_MR))
+
+
+p2<-ggplot(full.analyses.df%>%filter(classification%in%c("endo","ecto")), aes(Log.10..Body.Mass..g., log10(adj_corr_MR)))+
+  geom_point(aes(color=classification), alpha=0.5)+
+  geom_point(data=full.analyses.df%>%filter(classification%in%c("oth")), color="gray", alpha=0.5)+
+  geom_smooth(aes(color=classification),method="lm", alpha=0.2, se=F)+
+  scale_color_manual(values=c("blue", "red", "black"))+
+  geom_line(data=lg10.new.endo,aes(y=lwr), color = "red", linetype = "dashed")+
+  geom_line(data=lg10.new.endo, aes(y=upr), color = "red", linetype = "dashed")+
+  geom_line(data=lg10.new.ecto,aes(y=lwr), color = "blue", linetype = "dashed")+
+  geom_line(data=lg10.new.ecto, aes(y=upr), color = "blue", linetype = "dashed")+
+  theme_classic(base_size = 14)+
+  labs(x=expression(paste(Log["10"]~Body~Mass~(g))), y= expression(paste(Log["10"]~"Mass-Specific MR (", O[2]*h^-1, ")")))+
+  theme(legend.title = element_blank(), 
+        legend.position = c(0.8,0.2))+
+  stat_regline_equation(label.y = 0.8, aes(label = ..eq.label..))
+p2
+
+full.analyses.df%>%filter(classification=="endo")%>%lm(log10(adj_corr_MR)~ Log.10..Body.Mass..g., data=.)%>%summary(.)
+full.analyses.df%>%filter(classification=="ecto")%>%lm(log10(adj_corr_MR)~ Log.10..Body.Mass..g., data=.)%>%summary(.)
+
+
+```
+
+*Left Panel* shows log-log plot of mass-specific MR by body mass for original uncorrected data from @wiemann2022fossil. *Left Panel* shows same relationship but with re-calibrated data. Red and blue lines are separate regressions for known endotherms and ectotherms respectively. Grey points are unclassified fossil data. Notice uncorrected data has no relationship. Regression equations for combined data are shown. Notice neither original nor corrected data show the expected scaling relationship of -1/4. Both are essentially flat though endotherms and ectotherms are have slightly different relationships when plotted separately.
+
+# Bayesian Predictive Models
+
+We will run logistic Bayesian models with probability of endothermy as the response using only extant data or presumed thermy data from fossil record (acting as the training set). We will then test classification success on the fossil data and simulated data parameterized on fossils, on known enodtherms, and known ectotherms separately.
+
+## Create response variable
+
+We will code a dummy variable with a 1 for endotherm and a 0 for non-endotherm, standardize predictors, etc...
+
+```{r, warning=F, message=F}
+
+dat.brms <- full.analyses.df%>%
+  mutate(endo=if_else(classification %in% c("endo"), 1, 0),
+         log10_adj_corr_MR.z = standardize(log10(adj_corr_MR)),
+         log10_mass.z = standardize(Log.10..Body.Mass..g.),
+         log10_MR_corr_no_mass_z = standardize(Log.10.MR.corr))
+```
+
+### Run a intercept only model with mass-specific MR
+  
+```{r, , warning=F, message=F}
+#use this to get idea of priors then set your own!!
+# priors <-get_prior(endo ~ 1, data = dat.brms%>%filter(Age=="Extant"), family = bernoulli())
+# 
+# int.only <- brm(
+#   formula = brms::bf(endo ~ 1),
+#   data = dat.brms%>%filter(Age=="Extant"),
+#   family = bernoulli(),
+#   cores = 4,
+#   chains = 4,
+#   thin = 10, #chop out transitions?
+#   warmup = 5000, #half of iterations
+#   iter = 10000,
+#   #prior = c(
+#   #     prior(normal(0, 10), "Intercept"),
+#   #     prior(cauchy(0, 2.5), "sigma")),
+#   prior = priors,
+#   save_pars = save_pars(all = TRUE), #need this for loo comparison
+#   control = list(adapt_delta = 0.97, max_treedepth = 18), #adapt_delta the target average proposal acceptance probability during Stan's adaptation period
+#   set.seed(2020)
+# )
+# 
+# save(int.only, file=paste(getwd(),"/brms_models/", "int_only.RData", sep="")) # save model
+
+load(file=paste(getwd(),"/brms_models/", "int_only.RData", sep="")) # If loading from pre-saved file and not re-running
+
+#pp_check(int.only, ndraws = 100) 
+#pp_check(int.only, type = "stat", stat = 'median', ndraws = 2000)
+#pp_check(int.only, type = "stat", stat = 'mean', ndraws = 2000)
+
+# trace and density plots
+#plot(int.only)
+
+```
+
+### Run an additive model with predictor: log10_adj_corr_MR.z (log 10(standardized adjusted MR from our re-calibrations)
+  
+```{r, warning=F, message=F}
+#use this to get idea of priors then set your own!!
+# priors <-get_prior(endo ~ log10_adj_corr_MR.z, data = dat.brms%>%filter(Age=="Extant"), family = bernoulli())
+# #
+# MR.only <- brm(
+#   formula = brms::bf(endo ~ log10_adj_corr_MR.z),
+#   data = dat.brms%>%filter(Age=="Extant"),
+#   family = bernoulli(),
+#   cores = 4,
+#   chains = 4,
+#   thin = 10, #chop out transitions?
+#   warmup = 5000, #half of iterations
+#   iter = 10000,
+#   prior = c(
+#        prior(student_t(3, 0, 2.5), "Intercept"),
+#        prior(normal(0, 5), "b")),
+#   #prior = priors,
+#   save_pars = save_pars(all = TRUE), #need this for loo comparison
+#   control = list(adapt_delta = 0.97, max_treedepth = 18), #adapt_delta the target average proposal acceptance probability during Stan's adaptation period
+#   set.seed(2020)
+# )
+
+# save(MR.only, file=paste(getwd(),"/brms_models/", "MR_only.RData", sep="")) # save model
+
+load(paste(getwd(),"/brms_models/", "MR_only.RData", sep="")) # If loading from pre-saved file and not re-running
+
+# summary(MR.only)
+#pp_check(MR.only, ndraws = 100) 
+#pp_check(MR.only, type = "stat", stat = 'median', ndraws = 2000)
+#pp_check(MR.only, type = "stat", stat = 'mean', ndraws = 2000)
+
+# trace and density plots
+#plot(MR.only)
+
+me <- conditional_effects(MR.only, "log10_adj_corr_MR.z")
+p <-plot(me, plot = FALSE)[[1]] +
+  scale_color_grey() +
+  scale_fill_grey()+
+  theme(axis.text.y   = element_text(size=14),
+        axis.text.x   = element_text(size=14),
+        axis.title.y  = element_text(size=14),
+        axis.title.x  = element_text(size=14),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.5))+labs(y="Probabilty of endothermy", x= "MC Vivo")
+p
+```
+If we plot the conditional effect of MC vivo against probability of endothermy. we can see that at lower values of MC vivo the probability of endothermy is low but with substantial uncertainty. Likewise as MC vivo increases the probability of endothermy increases.
+
+### Run an additive model with predictors: 
+log10_adj_corr_MR.z (log 10(standardized adjusted MR from our re-calibrations); Log.10..Body.Mass..g.z (what a nice name, standardized log10 body mass in grams)
+  
+```{r, warning=F, message=F}
+#use this to get idea of priors then set your own!!
+# priors <-get_prior(endo ~ log10_adj_corr_MR.z + log10_mass.z, data = dat.brms%>%filter(Age=="Extant"), family = bernoulli(link = "logit"))
+# 
+# MR.mass <- brm(
+#   formula = brms::bf(endo ~ log10_adj_corr_MR.z + log10_mass.z ),
+#   data = dat.brms%>%filter(Age=="Extant"),
+#   family = bernoulli(link = "logit"),
+#   cores = 4,
+#   chains = 4,
+#   thin = 10, #chop out transitions?
+#   warmup = 5000, #half of iterations
+#   iter = 10000,
+#   prior = c(
+#       prior(student_t(3, 0, 2.5), "Intercept"),
+#       prior(normal(0, 5), "b")),
+#   #prior = priors,
+#   save_pars = save_pars(all = TRUE), #need this for loo comparison
+#   control = list(adapt_delta = 0.97, max_treedepth = 18), #adapt_delta the target average proposal acceptance probability during Stan's adaptation period
+#   set.seed(2020)
+# )
+# 
+# save(MR.mass, file=paste(getwd(),"/brms_models/", "MR_mass.RData", sep="")) # save model
+
+load(paste(getwd(),"/brms_models/", "MR_mass.RData", sep="")) # If loading from pre-saved file and not re-running
+
+#summary(MR.mass)
+#pp_check(MR.mass, ndraws = 100) 
+#pp_check(MR.mass, type = "stat", stat = 'median', ndraws = 2000)
+#pp_check(MR.mass, type = "stat", stat = 'mean', ndraws = 2000)
+
+# trace and density plots
+#plot(MR.mass)
+
+
+me <- conditional_effects(MR.mass, "log10_adj_corr_MR.z")
+p <-plot(me, plot = FALSE)[[1]] +
+  scale_color_grey() +
+  scale_fill_grey()+
+  theme(axis.text.y   = element_text(size=14),
+        axis.text.x   = element_text(size=14),
+        axis.title.y  = element_text(size=14),
+        axis.title.x  = element_text(size=14),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        panel.border = element_rect(colour = "black", fill=NA, size=0.5))+labs(y="Probabilty of endothermy", x= "MC Vivo")
+p
+
+#This is just cleaner theme
+#plot_cap(MR.mass, condition = "log10_adj_corr_MR.z")
+
+```
+Models look no different with respect to conditional effect of MC vivo. We will do model selection by LOOIC below.
+
+
+## Model selection
+
+### LOO
+
+```{r, echo=F, warning=F, message =F}
+LOO(int.only, MR.only, MR.mass, reloo=TRUE, moment_match = TRUE) 
+
+#LOO likes MR.only model best.
+
+```
+Model with only MC vivo is best by LOOIC.
+
+## Check predictive power of best model 
+### Predict from posterior
+Now we want to use the model trained by known endotherms and ectotherms to predict unknown fossil data. First we want to see individual predictions from the data included in the model ( _i.e._ where taxa fall on the curve plotted above).
+```{r, warning=F, message=F}
+pred <- marginaleffects::predictions(MR.only,
+                    newdata = datagrid(log10_adj_corr_MR.z = dat.brms%>%filter(Age=="Extant")%>% pull(log10_adj_corr_MR.z)))
+
+
+pred <- posteriordraws(pred)
+
+mod.tax <- dat.brms%>%filter(Age=="Extant")%>% pull(Taxon) %>% as.character()
+
+pred$taxon <-rep(mod.tax, times=200)
+
+pred <-left_join(pred, full.analyses.df%>%filter(Age=="Extant")%>%dplyr::select(Taxon, termy_3_cat)%>%dplyr::rename(taxon=Taxon))
+
+ext.pr <- pred%>%
+  group_by(taxon)%>%
+  summarize(log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
+            draw= median(draw))
+
+ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw))+
+    stat_lineribbon(color="transparent") +
+  stat_halfeye(aes(color=termy_3_cat), point_interval = "median_qi", .width = c(0.5, 0.8,0.95)) +
+    scale_fill_brewer(palette = "Greys") +
+    labs(x = "MC Vivo",
+         y = "Probability of endothermy",
+         fill = "")+
+  scale_color_manual(values=c("blue", "red"))+
+  geom_text(data=ext.pr, aes(label=taxon), size=2,color="black",
+    nudge_x = 0.1, nudge_y = -0.0, 
+    check_overlap = F
+  )+
+  theme(legend.position = c(0.2, 0.75),
+        legend.title = element_blank())
+
+```
+Hard to read individual labels but see figure 1 in reply for neater representation. It is clear from this plot that most data in the middle of the MC vivo range has very low prediction power.
+
+### Check predictive power of model using the fossil taxa of other thermy
+```{r, warning=F, message=F}
+pred.foss.oth <- predictions(MR.only,
+                    newdata = datagrid(log10_adj_corr_MR.z = dat.brms%>%filter(Age=="Fossil",classification=="oth")%>% pull(log10_adj_corr_MR.z)))
+
+pred.foss.oth <- posteriordraws(pred.foss.oth)
+
+oth.tax<-dat.brms%>%filter(Age=="Fossil",classification=="oth")%>% dplyr::select(Taxon,log10_adj_corr_MR.z)%>%pull(Taxon)
+
+pred.foss.oth$taxon <-rep(oth.tax, times=2000)
+
+pred.foss.oth<-left_join(pred.foss.oth, full.analyses.df%>%filter(Age=="Fossil", classification=="oth")%>%dplyr::select(Taxon, termy_3_cat)%>%dplyr::rename(taxon=Taxon))
+
+oth.pr <- pred.foss.oth%>%
+  group_by(taxon)%>%
+  summarize(log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
+            draw= median(draw),
+         lwr = quantile(conf.low, probs=0.25),
+         upper = quantile(conf.high, probs=0.75))
+
+
+ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw)) +
+    stat_lineribbon(color="transparent") +
+  stat_halfeye(data=pred.foss.oth,color="grey85", point_interval = "median_qi", .width = c(0.5, 0.8,0.95)) +
+  #geom_point(data=oth.pr)+
+   #geom_pointrange(data=oth.pr, aes(ymin = lwr, ymax = upper))+
+    scale_fill_brewer(palette = "Greys") +
+    labs(x = "MC Vivo",
+         y = "Probability of endothermy",
+         fill = "")+
+  #scale_color_manual(values=c("blue", "red"))+
+  geom_text(data=oth.pr, aes(label=taxon), size=2,color="black",
+    nudge_x = 0.1, nudge_y = -0.0, 
+    check_overlap = F
+  )
+```
+
+
+```{r, warning=F, message=F}
+
+pred.foss.endo <- predictions(MR.only, 
+                    newdata = datagrid(log10_adj_corr_MR.z = dat.brms%>%filter(Age=="Fossil",classification=="endo") %>%pull(log10_adj_corr_MR.z)))
+
+pred.foss.endo <- posteriordraws(pred.foss.endo)
+
+endo.tax<-dat.brms%>%filter(Age=="Fossil",classification=="endo")%>% dplyr::select(Taxon,log10_adj_corr_MR.z)%>%pull(Taxon)
+
+pred.foss.endo$taxon <-rep(endo.tax, times=2000)
+
+endo.pr <- pred.foss.endo%>%
+  group_by(taxon)%>%
+  summarize(log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
+            draw= median(draw),
+         lwr = quantile(conf.low, probs=0.25),
+         upper = quantile(conf.high, probs=0.75))
+
+
+ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw)) +
+    stat_lineribbon(color="transparent") +
+  stat_halfeye(data=pred.foss.oth,color="grey85", point_interval = "median_qi", .width = c(0.5, 0.8,0.95)) +
+  stat_halfeye(data=pred.foss.endo,color="red", point_interval = "median_qi", .width = c(0.5, 0.8,0.95)) +
+  #geom_point(data=oth.pr)+
+   #geom_pointrange(data=oth.pr, aes(ymin = lwr, ymax = upper), color="grey")+
+  #geom_pointrange(data=endo.pr, aes(ymin = lwr, ymax = upper), color="red")+
+    scale_fill_brewer(palette = "Greys") +
+    labs(x = "MC Vivo",
+         y = "Probability of endothermy",
+         fill = "")+
+  geom_text(data=endo.pr, aes(label=taxon), size=2, color="black",
+    nudge_x = 0, nudge_y = 0,
+    check_overlap = F
+  )+
+  geom_text(data=oth.pr, aes(label=taxon), size=2, color="black",
+    nudge_x = 0, nudge_y = 0,
+    check_overlap = F
+  )+
+  theme(legend.position = c(0.8,0.3))
+
+
+  
+```
+
+# References
