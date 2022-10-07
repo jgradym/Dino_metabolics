@@ -847,9 +847,7 @@ pred.foss.oth<-left_join(pred.foss.oth, full.analyses.df%>%filter(Age=="Fossil",
 oth.pr <- pred.foss.oth%>%
   group_by(taxon)%>%
   summarize(log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
-            draw= median(draw),
-         lwr = quantile(conf.low, probs=0.25),
-         upper = quantile(conf.high, probs=0.75))
+            draw= median(draw))
 
 
 ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw)) +
