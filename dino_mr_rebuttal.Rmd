@@ -2,6 +2,7 @@
 title: "Dino Metabolisim Reanalysis"
 author: "Chauncey Gadek"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
+bibliography: refs.bib
 output:
   rmdformats::readthedown:
     highlight: tango
