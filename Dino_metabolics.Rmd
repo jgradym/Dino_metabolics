@@ -35,36 +35,39 @@ library(marginaleffects)
 library(ape)
 library(caper)
 library(geiger)
+library(RColorBrewer)
 library(nlme)
 library(phytools)
 library(robustHD)
 library(emmeans)
 library(loo)
 library("corpcor")
+library(viridis)
+library(viridisLite)
 library(caret)
 theme_set(theme_classic())
 #Load functions
-# sapply(list.files(pattern="[.]R$", path="~/Dropbox/Research/Dino_metabolics_rebuttal/functions", full.names=TRUE), source)
+# sapply(list.files(pattern="[.]R$", path="~/Dropbox/Research/Dino_metabolics/functions", full.names=TRUE), source)
 
 ```
 
 ```{r, echo=F, warning=F, message=F}
-dat.lm <- read.csv(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/dino_MR_lm_jg.csv", header=T, stringsAsFactors = T)
+dat.lm <- read.csv(file="~/Dropbox/Research/Dino_metabolics/data/dino_MR_lm_jg.csv", header=T, stringsAsFactors = T)
 
-dat.calib <- read.csv(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/calib.csv", header=T, stringsAsFactors = T)
+dat.calib <- read.csv(file="~/Dropbox/Research/Dino_metabolics/data/calib.csv", header=T, stringsAsFactors = T)
 
-dat.calib.extant <- read.csv(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/calib_25.csv", header=T, stringsAsFactors = T)
+dat.calib.extant <- read.csv(file="~/Dropbox/Research/Dino_metabolics/data/calib_25.csv", header=T, stringsAsFactors = T)
 
-dat.calib.fossil <- read.csv(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/calib_fossil.csv", header=T, stringsAsFactors = T)
+dat.calib.fossil <- read.csv(file="~/Dropbox/Research/Dino_metabolics/data/calib_fossil.csv", header=T, stringsAsFactors = T)
 
 
 #load tree and taxon times from Iris Mendez' GitHub:https://github.com/IrisMenendez/Dinosaur_metabolism/blob/main/Data/Final_tree.nex
 
-tree <- read.nexus(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/consensus_Paleotree_final.tre")
+tree <- read.nexus(file="~/Dropbox/Research/Dino_metabolics/data/consensus_Paleotree_final.tre")
 
-tree.tt <- ape::read.tree(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/extant.nwk")
+tree.tt <- ape::read.tree(file="~/Dropbox/Research/Dino_metabolics/data/extant.nwk")
 
-disc.df <-read.csv(file="~/Dropbox/Research/Dino_metabolics_rebuttal/data/disc_fossil.csv", header=T, stringsAsFactors = T)
+disc.df <-read.csv(file="~/Dropbox/Research/Dino_metabolics/data/disc_fossil.csv", header=T, stringsAsFactors = T)
 
 ```
 This markdown file is meant to illustrate workflow (at a high level) for our reanalysis of @wiemann2022fossil. Broadly, we correct a single erroneous calibration point and re analyse the data following their presumed workflow. We then use Bayesian logistic regression to appropriately interrogate their data for a metabolic signal.
@@ -157,7 +160,7 @@ ggplot(orig_df_full, aes(Log.10..Body.Mass..g., Log.10..Upper.MR))+
 
 ```
 
-Blue points are non-endotherm samples and yellow points are endotherm samples as designated by @wiemann2022fossil. Yellow dashed lines are upper and lower bounds of prediction interval for known endotherm only linear model. Blue dashed lines delineate prediction interval for known other points. Note the prediction interval for non-endotherms encompasses 100% of known endotherm data points (if extrapolated).
+Blue points are non-endotherm (some ectotherms and unknown fossil taxa) samples and yellow points are endotherm samples as designated by @wiemann2022fossil. Yellow dashed lines are upper and lower bounds of prediction interval for the known endotherm-only linear model. Blue dashed lines delineate prediction interval for known non-endotherm linear model. Note the prediction interval for non-endotherms encompasses 100% of known endotherm data points (if extrapolated).
 
 ## Expected Scaling relationship
 
@@ -179,11 +182,11 @@ ggplot(data=dat.calib.extant%>%filter(classification %in% c("endo","ecto")), aes
 
 ```
 
-We see that known endotherms in red show a slightly positive slope barely greater than zero--running counter to the expected -1/4 slope derived from previous work. Ecotherms actually do show an almost -1/4 slope but the association is driven by a single point, making inference dubious.
+We see that known endotherms in red show a slightly positive slope barely greater than zero—running counter to the expected -1/4 slope derived from previous work. Ecotherms actually do show a nearly -1/4 slope but the association is clearly driven by a single point, making inference dubious.
 
 # Calibration issues
 
-The value of 11 for the Anseriform duck which drives the @wiemann2022fossil fossil calibration (Figure 1B) is from @legendre2016palaeohistological by way of @montes2007relationships where they measured RMR in captive _Anas platyrynchos_ ducklings in _mL_ O~2~ * h^-1^ * g^-1^ in @montes2007relationships and used an allometric correction in @legendre2016palaeohistological _mL_ O~2~ * h^-1^ * g^-0.67^ for the same values. @wiemann2022fossil use the allometrically corrected duck value with an uncorrected axis and possibly uncorrected values for other taxa, inflating the positive relationship between Literature MR and Amide derived values. 
+The value of 11 for the Anseriform duck which drives the @wiemann2022fossil fossil calibration (Figure 1B) is from @legendre2016palaeohistological by way of @montes2007relationships where they measured RMR in captive _Anas platyrynchos_ ducklings in _mL_ O~2~ * h^-1^ * g^-1^ in @montes2007relationships and used an allometric correction in @legendre2016palaeohistological _mL_ O~2~ * h^-1^ * g^-0.67^ for the same values. @wiemann2022fossil use the allometrically corrected duck value with an uncorrected axis, inflating the positive relationship between Literature MR and Amide derived values. 
 
 Therefore the value in Figure 1b for the Anseriform duck reads 11 but it should in fact be 2.35 based on calculation from the original source @montes2007relationships.
 
@@ -248,14 +251,12 @@ ggplot(data=dat.calib%>%filter(!row_number() %in% c(9)), aes(X.S.N..Amide...MC.i
   )
 ```
 
-Grey line shows original calibration linear model. Purple line shows corrected linear model. The relationship all but disappears after correcting the duck point... 
-
-
+Grey line shows original calibration linear model. Purple line shows corrected linear model. The relationship all but disappears after correcting the duck point. 
 
 ## Second calibration for extant taxa
-Though difficult to tell from the main text, it appears there were two calibrations(?) One for fossil taxa above and one for extant taxa (See Figure S7 and 'Extant Taxa' tab from supplementary workbook from @wiemann2022fossil)
+Though difficult to tell from the main text, it appears there were two calibrations(?). One for the fossil taxa shown above and one for extant taxa (See Figure S7 and 'Extant Taxa' tab from supplementary workbook from @wiemann2022fossil)
 
-They regressed n=25 literature MR values (not cited??) against spectral Amide ( _MC in vivo_) values from museum samples. We know from the literature that again this duck point ( _Dendrocygna_) cannot be correct (much higher than hummingbird). So, in absence of the known lit-derived value we will remove this point from our calibration. Second, we suspect intense phylogenetic signal within this calibration and would like to correct for it. We will use the tree that @wiemann2022fossil used to run a PGLS model.
+They regressed _n=25_ literature MR values (not cited??) against spectral Amide ( _MC in vivo_) values from museum samples. We know from the literature that again this duck point ( _Dendrocygna_) cannot be correct (much higher than hummingbird). So, in absence of the known lit-derived value we will remove this point from our calibration. Second, we suspect intense phylogenetic signal within this calibration and would like to correct for it. We will use the tree that @wiemann2022fossil used to run a PGLS model.
 
 ```{r, warning=F, message=F}
 
@@ -313,6 +314,7 @@ pgls.dat$Taxon.Name <- dat.calib.extant$Taxon.Name
 #is the tree ultrametric?
 #is.ultrametric(tree.tt)
 #yep!
+#plot(tree.tt)
 
 #have to make a second one to match order of tips in time tree
 tiporder <- tree.tt$tip.label
@@ -346,7 +348,7 @@ pglsModel.pgl.0 <- gls(Literature.MR..mL.O2...1.h...1.g. ~ X.S.N..Amide...MC.in.
 summary(pglsModel.pgl.0)
 
 ```
-We see that pure phylogentic independence model and _Dendrocygna_ removed reduces the slope of the extant calibration from 7.867 to 7.414920 and further increases the intercept from -6.141 to -5.627356. The model estimates _lamda_ at 0.17, pretty low phylo signal actually. 
+We see that a pure phylogenetic independence model and _Dendrocygna_ removed reduces the slope of the extant calibration from 7.867 to 7.414920 and further increases the intercept from -6.141 to -5.627356. The model estimates _lamda_ at 0.17, pretty low phylo signal. 
 
 
 ```{r,  warning=F, message=F}
@@ -528,8 +530,6 @@ oth.mod2 <- full.analyses.df%>%
 temp_var_oth_PI <- predict(oth.mod2, newdata=newdata, interval="prediction", level=0.95)
 new_df_oth_PI <- cbind(full.analyses.df, temp_var_oth_PI)
 ```
-
-
 
 # Expected MR patterns 
 
@@ -811,7 +811,8 @@ pred <-left_join(pred, full.analyses.df%>%filter(Age=="Extant")%>%dplyr::select(
 ext.pr <- pred%>%
   group_by(taxon)%>%
   summarize(log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
-            draw= median(draw))
+            median = median(predicted),
+            uncertainty = conf.high -conf.low)
 
 ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw))+
     stat_lineribbon(color="transparent") +
@@ -847,10 +848,11 @@ pred.foss.oth<-left_join(pred.foss.oth, full.analyses.df%>%filter(Age=="Fossil",
 oth.pr <- pred.foss.oth%>%
   group_by(taxon)%>%
   summarize(log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
-            draw= median(draw))
+            median = median(predicted),
+            uncertainty = conf.high -conf.low)
 
 
-ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw)) +
+ggplot(pred, aes(x = log10_adj_corr_MR.z, y = predicted)) +
     stat_lineribbon(color="transparent") +
   stat_halfeye(data=pred.foss.oth,color="grey85", point_interval = "median_qi", .width = c(0.5, 0.8,0.95)) +
   #geom_point(data=oth.pr)+
@@ -881,12 +883,11 @@ pred.foss.endo$taxon <-rep(endo.tax, times=2000)
 endo.pr <- pred.foss.endo%>%
   group_by(taxon)%>%
   summarize(log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
-            draw= median(draw),
-         lwr = quantile(conf.low, probs=0.25),
-         upper = quantile(conf.high, probs=0.75))
+            median = median(predicted),
+            uncertainty = conf.high -conf.low)
 
 
-ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw)) +
+ggplot(pred, aes(x = log10_adj_corr_MR.z, y = predicted)) +
     stat_lineribbon(color="transparent") +
   stat_halfeye(data=pred.foss.oth,color="grey85", point_interval = "median_qi", .width = c(0.5, 0.8,0.95)) +
   stat_halfeye(data=pred.foss.endo,color="red", point_interval = "median_qi", .width = c(0.5, 0.8,0.95)) +
@@ -909,6 +910,41 @@ ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw)) +
 
 
   
+```
+
+# Ancestral State Reconstruction
+```{r}
+anc.df <- rbind(ext.pr, endo.pr, oth.pr)
+
+anc.df[25, "taxon"] <- "Anseriform"
+
+species <- anc.df$taxon
+
+tree.anc <- keep.tip(tree, species)
+
+anc.df <-anc.df[match(tree.anc$tip.label, anc.df$taxon),]
+
+
+
+anc.df <- anc.df[,-(1:2)]
+rownames(anc.df) <- tree.anc$tip.label
+anc.df<-as.matrix(anc.df)[,1]
+anc.df
+
+n_cols <- n_distinct(anc.df)
+
+obj <- contMap(tree.anc, anc.df, res=500, lwd=2)
+
+# Change the color palette
+contmap_obj_viridis <- setMap(obj, viridis(n_cols))
+
+# Plot the mapped characters with the new colors
+plot(
+  contmap_obj_viridis,
+  lwd=2,
+  legend = 0.7*max(nodeHeights(tree.anc)),
+  fsize = c(0.5, 0.7))
+
 ```
 
 # References
