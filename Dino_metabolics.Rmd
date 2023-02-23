@@ -1,5 +1,5 @@
 ---
-title: "Weimann et al. 2022 Reply"
+title: "Dino Metabolics"
 author: "Chauncey Gadek"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 bibliography: refs.bib
