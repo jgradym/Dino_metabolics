@@ -986,7 +986,7 @@ n_cols <- n_distinct(anc.med)
 obj <- contMap(tree.anc, anc.med, res=500, lwd=1)
 
 # Change the color palette
-contmap_obj_viridis <- setMap(obj, plasma(n_cols))
+contmap_obj_viridis <- setMap(obj, rocket(n_cols))
 
 # Plot the mapped characters with the new colors
 plot(
@@ -1004,7 +1004,7 @@ n_cols <- n_distinct(anc.var)
 obj2 <- contMap(tree.anc, anc.var, res=500, lwd=1)
 
 # Change the color palette
-contmap_obj2_viridis <- setMap(obj2, plasma(n_cols))
+contmap_obj2_viridis <- setMap(obj2, rocket(n_cols))
 
 # Plot the mapped characters with the new colors
 plot(
@@ -1018,12 +1018,12 @@ par(mfrow=c(1,2))
 plot(
   contmap_obj_viridis,
   lwd=2,
-  legend = 0.7*max(nodeHeights(tree.anc)), ftype="off",
+  legend = 0.7*max(nodeHeights(tree.anc)),
   fsize = c(0.5, 0.7))
 plot(
   contmap_obj2_viridis,
   lwd=2,
-  legend = 0.7*max(nodeHeights(tree.anc)),ftype="off",
+  legend = 0.7*max(nodeHeights(tree.anc)),
   fsize = c(0.5, 0.7), direction="leftwards")
 
 ```
