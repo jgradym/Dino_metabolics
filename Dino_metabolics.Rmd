@@ -811,7 +811,8 @@ pred <-left_join(pred, full.analyses.df%>%filter(Age=="Extant")%>%dplyr::select(
 ext.pr <- pred%>%
   group_by(taxon)%>%
   summarize(log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
-            median = median(predicted),
+            draw = median(draw),
+            median = median(draw),
             uncertainty = conf.high -conf.low)
 
 ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw))+
@@ -830,91 +831,142 @@ ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw))+
         legend.title = element_blank())
 
 ```
-Hard to read individual labels but see figure 1 in reply for neater representation. It is clear from this plot that most data in the middle of the MC vivo range has very low prediction power.
+Hard to read individual labels but see figure 1 in reply for neater representation. It is clear from this plot that most data in the middle of the MC vivo range (steep slope) has very low prediction power.
 
 ### Check predictive power of model using the fossil taxa of other thermy
 ```{r, warning=F, message=F}
 pred.foss.oth <- predictions(MR.only,
-                    newdata = datagrid(log10_adj_corr_MR.z = dat.brms%>%filter(Age=="Fossil",classification=="oth")%>% pull(log10_adj_corr_MR.z)))
+                             newdata = datagrid(
+                               log10_adj_corr_MR.z = dat.brms %>% filter(Age == "Fossil", classification ==
+                                                                           "oth") %>% pull(log10_adj_corr_MR.z)
+                             ))
 
 pred.foss.oth <- posteriordraws(pred.foss.oth)
 
-oth.tax<-dat.brms%>%filter(Age=="Fossil",classification=="oth")%>% dplyr::select(Taxon,log10_adj_corr_MR.z)%>%pull(Taxon)
+oth.tax <-
+  dat.brms %>% filter(Age == "Fossil", classification == "oth") %>% dplyr::select(Taxon, log10_adj_corr_MR.z) %>%
+  pull(Taxon)
 
-pred.foss.oth$taxon <-rep(oth.tax, times=2000)
+pred.foss.oth$taxon <- rep(oth.tax, times = 2000)
 
-pred.foss.oth<-left_join(pred.foss.oth, full.analyses.df%>%filter(Age=="Fossil", classification=="oth")%>%dplyr::select(Taxon, termy_3_cat)%>%dplyr::rename(taxon=Taxon))
+pred.foss.oth <-
+  left_join(
+    pred.foss.oth,
+    full.analyses.df %>% filter(Age == "Fossil", classification == "oth") %>%
+      dplyr::select(Taxon, termy_3_cat) %>% dplyr::rename(taxon = Taxon)
+  )
 
-oth.pr <- pred.foss.oth%>%
-  group_by(taxon)%>%
-  summarize(log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
-            median = median(predicted),
-            uncertainty = conf.high -conf.low)
+oth.pr <- pred.foss.oth %>%
+  group_by(taxon) %>%
+  summarize(
+    log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
+    draw = median(draw),
+    median = median(draw),
+    uncertainty = conf.high - conf.low
+  )
 
 
-ggplot(pred, aes(x = log10_adj_corr_MR.z, y = predicted)) +
-    stat_lineribbon(color="transparent") +
-  stat_halfeye(data=pred.foss.oth,color="grey85", point_interval = "median_qi", .width = c(0.5, 0.8,0.95)) +
+ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw)) +
+  stat_lineribbon(color = "transparent") +
+  stat_halfeye(
+    data = pred.foss.oth,
+    color = "grey85",
+    point_interval = "median_qi",
+    .width = c(0.5, 0.8, 0.95)
+  ) +
   #geom_point(data=oth.pr)+
-   #geom_pointrange(data=oth.pr, aes(ymin = lwr, ymax = upper))+
-    scale_fill_brewer(palette = "Greys") +
-    labs(x = "MC Vivo",
-         y = "Probability of endothermy",
-         fill = "")+
+  #geom_pointrange(data=oth.pr, aes(ymin = lwr, ymax = upper))+
+  scale_fill_brewer(palette = "Greys") +
+  labs(x = "MC Vivo",
+       y = "Probability of endothermy",
+       fill = "") +
   #scale_color_manual(values=c("blue", "red"))+
-  geom_text(data=oth.pr, aes(label=taxon), size=2,color="black",
-    nudge_x = 0.1, nudge_y = -0.0, 
+  geom_text(
+    data = oth.pr,
+    aes(label = taxon),
+    size = 2,
+    color = "black",
+    nudge_x = 0.1,
+    nudge_y = -0.0,
     check_overlap = F
   )
 ```
 
 
 ```{r, warning=F, message=F}
-
-pred.foss.endo <- predictions(MR.only, 
-                    newdata = datagrid(log10_adj_corr_MR.z = dat.brms%>%filter(Age=="Fossil",classification=="endo") %>%pull(log10_adj_corr_MR.z)))
+pred.foss.endo <- predictions(MR.only,
+                              newdata = datagrid(
+                                log10_adj_corr_MR.z = dat.brms %>% filter(Age == "Fossil", classification ==
+                                                                            "endo") %>% pull(log10_adj_corr_MR.z)
+                              ))
 
 pred.foss.endo <- posteriordraws(pred.foss.endo)
 
-endo.tax<-dat.brms%>%filter(Age=="Fossil",classification=="endo")%>% dplyr::select(Taxon,log10_adj_corr_MR.z)%>%pull(Taxon)
+endo.tax <-
+  dat.brms %>% filter(Age == "Fossil", classification == "endo") %>% dplyr::select(Taxon, log10_adj_corr_MR.z) %>%
+  pull(Taxon)
 
-pred.foss.endo$taxon <-rep(endo.tax, times=2000)
+pred.foss.endo$taxon <- rep(endo.tax, times = 2000)
 
-endo.pr <- pred.foss.endo%>%
-  group_by(taxon)%>%
-  summarize(log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
-            median = median(predicted),
-            uncertainty = conf.high -conf.low)
+endo.pr <- pred.foss.endo %>%
+  group_by(taxon) %>%
+  summarize(
+    log10_adj_corr_MR.z = median(log10_adj_corr_MR.z),
+    draw = median(draw),
+    median = median(draw),
+    uncertainty = conf.high - conf.low
+  )
 
 
-ggplot(pred, aes(x = log10_adj_corr_MR.z, y = predicted)) +
-    stat_lineribbon(color="transparent") +
-  stat_halfeye(data=pred.foss.oth,color="grey85", point_interval = "median_qi", .width = c(0.5, 0.8,0.95)) +
-  stat_halfeye(data=pred.foss.endo,color="red", point_interval = "median_qi", .width = c(0.5, 0.8,0.95)) +
+ggplot(pred, aes(x = log10_adj_corr_MR.z, y = draw)) +
+  stat_lineribbon(color = "transparent") +
+  stat_halfeye(
+    data = pred.foss.oth,
+    color = "grey85",
+    point_interval = "median_qi",
+    .width = c(0.5, 0.8, 0.95)
+  ) +
+  stat_halfeye(
+    data = pred.foss.endo,
+    color = "red",
+    point_interval = "median_qi",
+    .width = c(0.5, 0.8, 0.95)
+  ) +
   #geom_point(data=oth.pr)+
-   #geom_pointrange(data=oth.pr, aes(ymin = lwr, ymax = upper), color="grey")+
+  #geom_pointrange(data=oth.pr, aes(ymin = lwr, ymax = upper), color="grey")+
   #geom_pointrange(data=endo.pr, aes(ymin = lwr, ymax = upper), color="red")+
-    scale_fill_brewer(palette = "Greys") +
-    labs(x = "MC Vivo",
-         y = "Probability of endothermy",
-         fill = "")+
-  geom_text(data=endo.pr, aes(label=taxon), size=2, color="black",
-    nudge_x = 0, nudge_y = 0,
+  scale_fill_brewer(palette = "Greys") +
+  labs(x = "MC Vivo",
+       y = "Probability of endothermy",
+       fill = "") +
+  geom_text(
+    data = endo.pr,
+    aes(label = taxon),
+    size = 2,
+    color = "black",
+    nudge_x = 0,
+    nudge_y = 0,
     check_overlap = F
-  )+
-  geom_text(data=oth.pr, aes(label=taxon), size=2, color="black",
-    nudge_x = 0, nudge_y = 0,
+  ) +
+  geom_text(
+    data = oth.pr,
+    aes(label = taxon),
+    size = 2,
+    color = "black",
+    nudge_x = 0,
+    nudge_y = 0,
     check_overlap = F
-  )+
-  theme(legend.position = c(0.8,0.3))
-
-
-  
+  ) +
+  theme(legend.position = c(0.8, 0.3))
 ```
 
 # Ancestral State Reconstruction
 ```{r}
+
 anc.df <- rbind(ext.pr, endo.pr, oth.pr)
+
+anc.df <- anc.df%>%
+  distinct()
 
 anc.df[25, "taxon"] <- "Anseriform"
 
@@ -924,19 +976,17 @@ tree.anc <- keep.tip(tree, species)
 
 anc.df <-anc.df[match(tree.anc$tip.label, anc.df$taxon),]
 
-
-
-anc.df <- anc.df[,-(1:2)]
+anc.df <- anc.df[,-(1:3)]
 rownames(anc.df) <- tree.anc$tip.label
-anc.df<-as.matrix(anc.df)[,1]
-anc.df
+anc.med<-as.matrix(anc.df)[,1] # ASR with median model estimates
+anc.med
 
-n_cols <- n_distinct(anc.df)
+n_cols <- n_distinct(anc.med)
 
-obj <- contMap(tree.anc, anc.df, res=500, lwd=2)
+obj <- contMap(tree.anc, anc.med, res=500, lwd=1)
 
 # Change the color palette
-contmap_obj_viridis <- setMap(obj, viridis(n_cols))
+contmap_obj_viridis <- setMap(obj, plasma(n_cols))
 
 # Plot the mapped characters with the new colors
 plot(
@@ -944,6 +994,37 @@ plot(
   lwd=2,
   legend = 0.7*max(nodeHeights(tree.anc)),
   fsize = c(0.5, 0.7))
+
+
+anc.var<-as.matrix(anc.df)[,2] # ASR with credible interval span
+anc.var
+
+n_cols <- n_distinct(anc.var)
+
+obj2 <- contMap(tree.anc, anc.var, res=500, lwd=1)
+
+# Change the color palette
+contmap_obj2_viridis <- setMap(obj2, plasma(n_cols))
+
+# Plot the mapped characters with the new colors
+plot(
+  contmap_obj2_viridis,
+  lwd=2,
+  legend = 0.7*max(nodeHeights(tree.anc)),
+  fsize = c(0.5, 0.7))
+
+#try cophyloplot
+par(mfrow=c(1,2))
+plot(
+  contmap_obj_viridis,
+  lwd=2,
+  legend = 0.7*max(nodeHeights(tree.anc)), ftype="off",
+  fsize = c(0.5, 0.7))
+plot(
+  contmap_obj2_viridis,
+  lwd=2,
+  legend = 0.7*max(nodeHeights(tree.anc)),ftype="off",
+  fsize = c(0.5, 0.7), direction="leftwards")
 
 ```
 
