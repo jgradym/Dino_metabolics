@@ -52,22 +52,22 @@ theme_set(theme_classic())
 ```
 
 ```{r, echo=F, warning=F, message=F}
-dat.lm <- read.csv(file="~/Dropbox/Research/Dino_metabolics/data/dino_MR_lm_jg.csv", header=T, stringsAsFactors = T)
+dat.lm <- read.csv(file=paste(getwd(), "/data/dino_MR_lm_jg.csv", sep=""), header=T, stringsAsFactors = T)
 
-dat.calib <- read.csv(file="~/Dropbox/Research/Dino_metabolics/data/calib.csv", header=T, stringsAsFactors = T)
+dat.calib <- read.csv(file=paste(getwd(), "/data/calib.csv", sep=""), header=T, stringsAsFactors = T)
 
-dat.calib.extant <- read.csv(file="~/Dropbox/Research/Dino_metabolics/data/calib_25.csv", header=T, stringsAsFactors = T)
+dat.calib.extant <- read.csv(file=paste(getwd(), "/data/calib_25.csv", sep= "" ), header=T, stringsAsFactors = T)
 
-dat.calib.fossil <- read.csv(file="~/Dropbox/Research/Dino_metabolics/data/calib_fossil.csv", header=T, stringsAsFactors = T)
+dat.calib.fossil <- read.csv(file=paste(getwd(), "/data/calib_fossil.csv", sep=""), header=T, stringsAsFactors = T)
 
 
 #load tree and taxon times from Iris Mendez' GitHub:https://github.com/IrisMenendez/Dinosaur_metabolism/blob/main/Data/Final_tree.nex
 
-tree <- read.nexus(file="~/Dropbox/Research/Dino_metabolics/data/consensus_Paleotree_final.tre")
+tree <- read.nexus(file=paste(getwd(), "/data/consensus_Paleotree_final.tre", sep=""))
 
-tree.tt <- ape::read.tree(file="~/Dropbox/Research/Dino_metabolics/data/extant.nwk")
+tree.tt <- ape::read.tree(file=paste(getwd(), "/data/extant.nwk", sep=""))
 
-disc.df <-read.csv(file="~/Dropbox/Research/Dino_metabolics/data/disc_fossil.csv", header=T, stringsAsFactors = T)
+# disc.df <-read.csv(file=paste(getwd(), "data/disc_fossil.csv", sep=""), header=T, stringsAsFactors = T)
 
 ```
 This markdown file is meant to illustrate workflow (at a high level) for our reanalysis of @wiemann2022fossil. Broadly, we correct a single erroneous calibration point and re analyse the data following their presumed workflow. We then use Bayesian logistic regression to appropriately interrogate their data for a metabolic signal.
