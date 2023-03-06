@@ -147,7 +147,37 @@ orig_df_oth <- dat.lm%>%
          Age =="Extant"), .)
 
 ```
+## Plot Scaling of Ratios
+```{r, fig.dim=c(8,6), echo=F, warning=F, message=F}
+library(readr)
+ratios <- read_csv(file = paste(getwd(), "/data/combo_data.csv", sep = "")) 
 
+ggplot(ratios, aes(x = Mass_kg, y = Amide_ratio)) +
+  geom_point(shape = 21, aes(fill = Taxa3), size = 3, color = "black") +
+ scale_x_log10(name = "Body Mass (kg)", breaks = c(1, 10, 100, 1000, 10000), 
+                labels = c("1", "10", "100", "1000", "10,000")) + 
+  scale_y_continuous("Amide Ratio") +
+  scale_fill_manual(values = c("Endotherm" = "brown3", "Ectotherm" = "dodgerblue", "Dinosaur" = "gray", Pterosaur = "black", "Plesiosaur" = "white", "Synapsid" = "gray25")) +
+   scale_color_manual(values = c("Endotherm" = "brown3", "Ectotherm" = "dodgerblue", "Unknown" = "gray")) +
+  theme_jg +
+  theme_jg +
+  guides(fill = guide_legend(override.aes = list(linetype = 0)),
+         color = guide_legend(override.aes = list(linetype = 0)))
+
+ggplot(ratios, aes(x = Mass_kg, y = Amide_ratio)) +
+  scale_x_log10(name = "Body Mass (kg)", breaks = c(1, 10, 100, 1000, 10000), 
+                labels = c("1", "10", "100", "1000", "10,000")) + 
+  scale_y_log10("Amide Ratio", breaks = c(2, 3, 5, 10)) +
+   scale_fill_manual(values = c("Endotherm" = "brown3", "Ectotherm" = "dodgerblue", "Dinosaur" = "gray", Pterosaur = "black", "Plesiosaur" = "white", "Synapsid" = "gray35")) +
+   scale_color_manual(values = c("Endotherm" = "brown3", "Ectotherm" = "dodgerblue", "Dinosaur" = "gray", Pterosaur = "black", "Plesiosaur" = "white", "Synapsid" = "gray35")) +
+  stat_smooth(data = . %>% filter(Taxa3 == "Endotherm" | Taxa3 == "Ectotherm" | Taxa3 == "Dinosaur"), method = "lm", aes(color = Taxa3, fill = Taxa3), alpha = 0.1) + 
+  geom_point(shape = 21, aes(fill = Taxa3), size = 4, color = "black") +
+  theme(legend.key = element_rect(fill = "transparent")) + # doesn't work
+  theme_jg + theme(legend.key=element_blank()) +  
+  guides(fill = guide_legend(override.aes = list(linetype = 0)),
+         color = guide_legend(override.aes = list(linetype = 0)))
+#would like to remove second Taxa3 legend, remove legend header ("Taxa3"), and box around points, option to add prediction intervals
+```
 ## Plot prediction intervals
 ```{r, fig.dim=c(8,6), echo=F, warning=F, message=F}
 #Plot it
@@ -160,13 +190,15 @@ ggplot(orig_df_full, aes(Log.10..Body.Mass..g., Log.10..Upper.MR))+
     #geom_smooth(method=lm, se=F, color="black")+
   #geom_smooth(data= orig_df_full %>% filter(thermy=="endo"), method=lm, se=T, fill="goldenrod", linetype=0)+
  # geom_smooth(data=orig_df_endo, method="lm", fill="goldenrod1", linetype=0)+
-     geom_line(data=orig_df_endo,aes(y=lwr), color = "goldenrod", linetype = "dashed")+
-    geom_line(data=orig_df_endo, aes(y=upr), color = "goldenrod", linetype = "dashed")+
+     geom_ribbon(data=orig_df_endo,aes(ymin=lwr, ymax = upr), alpha = 0.3, fill = "brown3")+
+    #geom_ribbon(data=orig_df_endo, aes(ymax=upr), color = "brown3", linetype = "dashed")+
  # geom_smooth(data=orig_df_oth, method="lm", fill="dodgerblue2", linetype=0)+
-     geom_line(data=orig_df_oth,aes(y=lwr), color = "dodgerblue2", linetype = "dashed")+
-    geom_line(data=orig_df_oth, aes(y=upr), color = "dodgerblue2", linetype = "dashed")+
-  geom_point(data= dat.lm, mapping= aes(Log.10..Body.Mass..g., Log.10..Upper.MR, fill=thermy), shape=21)+
-  scale_fill_manual(values=c("goldenrod", "dodgerblue2"))+
+    # geom_line(data=orig_df_oth,aes(y=lwr), color = "dodgerblue2", linetype = "dashed")+
+    #geom_line(data=orig_df_oth, aes(y=upr), color = "dodgerblue2", linetype = "dashed")+
+      geom_ribbon(data=orig_df_oth, aes(ymax = upr, ymin = lwr), alpha = 0.3, fill = "dodgerblue2")+
+
+  geom_point(data= dat.lm, mapping= aes(Log.10..Body.Mass..g., Log.10..Upper.MR, fill=thermy), shape=21, size = 4)+
+  scale_fill_manual(values=c("brown3", "dodgerblue2"))+
   labs(y=expression(log["10"](MR)), x= expression(log["10"]~Body~Mass~(g)))+
     theme_jg +
   #theme_classic(base_size = 14)+
