@@ -152,24 +152,26 @@ orig_df_oth <- dat.lm%>%
 library(readr)
 ratios <- read_csv(file = paste(getwd(), "/data/combo_data.csv", sep = "")) 
 
+#no Ratio log transformed
 ggplot(ratios, aes(x = Mass_kg, y = Amide_ratio)) +
   geom_point(shape = 21, aes(fill = Taxa3), size = 3, color = "black") +
  scale_x_log10(name = "Body Mass (kg)", breaks = c(1, 10, 100, 1000, 10000), 
                 labels = c("1", "10", "100", "1000", "10,000")) + 
   scale_y_continuous("Amide Ratio") +
-  scale_fill_manual(values = c("Endotherm" = "brown3", "Ectotherm" = "dodgerblue", "Dinosaur" = "gray", Pterosaur = "black", "Plesiosaur" = "white", "Synapsid" = "gray25")) +
+  scale_fill_manual(values = c("Endotherm" = "brown3", "Ectotherm" = "dodgerblue", "Dinosaur" = "gray", Pterosaur = "black", "Plesiosaur" = "white", "Synapsid" = "gray30")) +
    scale_color_manual(values = c("Endotherm" = "brown3", "Ectotherm" = "dodgerblue", "Unknown" = "gray")) +
   theme_jg +
-  theme_jg +
+   stat_smooth(data = . %>% filter(Taxa3 == "Endotherm" | Taxa3 == "Ectotherm" | Taxa3 == "Dinosaur"), method = "lm", aes(color = Taxa3, fill = Taxa3), alpha = 0.1) + 
   guides(fill = guide_legend(override.aes = list(linetype = 0)),
          color = guide_legend(override.aes = list(linetype = 0)))
 
+# Ratio log transformed
 ggplot(ratios, aes(x = Mass_kg, y = Amide_ratio)) +
   scale_x_log10(name = "Body Mass (kg)", breaks = c(1, 10, 100, 1000, 10000), 
                 labels = c("1", "10", "100", "1000", "10,000")) + 
   scale_y_log10("Amide Ratio", breaks = c(2, 3, 5, 10)) +
-   scale_fill_manual(values = c("Endotherm" = "brown3", "Ectotherm" = "dodgerblue", "Dinosaur" = "gray", Pterosaur = "black", "Plesiosaur" = "white", "Synapsid" = "gray35")) +
-   scale_color_manual(values = c("Endotherm" = "brown3", "Ectotherm" = "dodgerblue", "Dinosaur" = "gray", Pterosaur = "black", "Plesiosaur" = "white", "Synapsid" = "gray35")) +
+   scale_fill_manual(values = c("Endotherm" = "brown3", "Ectotherm" = "dodgerblue", "Dinosaur" = "gray", Pterosaur = "black", "Plesiosaur" = "white", "Synapsid" = "gray40")) +
+   scale_color_manual(values = c("Endotherm" = "brown3", "Ectotherm" = "dodgerblue", "Dinosaur" = "gray", Pterosaur = "black", "Plesiosaur" = "white", "Synapsid" = "gray40")) +
   stat_smooth(data = . %>% filter(Taxa3 == "Endotherm" | Taxa3 == "Ectotherm" | Taxa3 == "Dinosaur"), method = "lm", aes(color = Taxa3, fill = Taxa3), alpha = 0.1) + 
   geom_point(shape = 21, aes(fill = Taxa3), size = 4, color = "black") +
   theme(legend.key = element_rect(fill = "transparent")) + # doesn't work
