@@ -1,0 +1,34 @@
+﻿Taxon,Mass_kg,Amide_ratio,Pred_MR,Thermy,Taxa2,Taxa3,Calibration
+Anseriform bird,5,11.16,10.60,Endotherm,Bird,Endotherm,T
+Diplodocid,56000,9.91,8.98,Unknown,Pterosaur,Pterosaur,F
+Rhamphorhynchoid,2,6.83,4.96,Unknown,Dinosaur,Dinosaur,F
+Hesperornis,24,6.79,4.92,Unknown,Dinosaur,Dinosaur,F
+Pachycephalosaur,370,6.58,4.64,Unknown,Dinosaur,Dinosaur,F
+Allosaurus,3500,6.57,4.64,Unknown,Dinosaur,Dinosaur,F
+Deinonychus,100,6.27,4.25,Unknown,Dinosaur,Dinosaur,F
+Brontothere,800,6.11,4.03,Endotherm,Mammal,Endotherm,F
+Nodosaurus,4800,6.09,4.01,Unknown,Dinosaur,Dinosaur,F
+Telmatornis,15,6.08,4.00,Endotherm,Bird,Endotherm,T
+Saniwa,1,5.60,3.37,Ectotherm,Extinct Varanid,Ectotherm,F
+Marsupial,15,5.59,3.35,Endotherm,Mammal,Endotherm,T
+Insectivore,0.5,5.56,3.32,Endotherm,Mammal,Endotherm,T
+Cetacean,5000,5.55,3.31,Endotherm,Mammal,Endotherm,T
+Tyrannosaurus,7700,5.44,3.17,Unknown,Dinosaur,Dinosaur,F
+Dryosaurus,90,4.97,2.55,Unknown,Dinosaur,Dinosaur,F
+Pteranodon,20,4.46,1.89,Unknown,Pterosaur,Pterosaur,F
+Polyglyphanodon,0.5,4.29,1.66,Ectotherm,Lizard,Ectotherm,F
+Odaxosaurus,1,4.16,1.50,Ectotherm,Lizard,Ectotherm,T
+Plesiosaur,3000,4.02,1.32,Unknown,Plesiosaur,Plesiosaur,F
+Melanosaurus,0.3,3.66,0.85,Unknown,Dinosaur,Dinosaur,F
+Crocodylomorph,150,3.42,0.54,Ectotherm,Crocodylomorph,Ectotherm,F
+Hadrosaur,7600,3.34,0.43,Unknown,Dinosaur,Dinosaur,F
+Xanthusiid,0.3,3.33,0.43,Ectotherm,Lizard,Ectotherm,T
+Triceratops,14000,3.00,0.00,Unknown,Dinosaur,Dinosaur,F
+Edaphosaurus,300,2.98,-0.04,Unknown,Sailfin Synapsid,Synapsid,F
+Stegosaurus,7000,2.75,-0.33,Unknown,Dinosaur,Unknown,F
+Champsosaur,1,2.71,-0.38,Ectotherm,Champsosaur,Ectotherm,F
+Cteniogenys,0.5,2.37,-0.83,Ectotherm,Choristodere,Ectotherm,F
+Palaeophis,2,2.08,-1.20,Ectotherm,Sea snake,Ectotherm,T
+,,,,,,,
+,,,,,,,
+,,,,,,,
